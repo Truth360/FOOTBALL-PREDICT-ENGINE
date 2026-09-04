@@ -2,9 +2,7 @@ name: Football Prediction Engine
 
 on:
   workflow_dispatch:
-
   schedule:
-    # Runs every 6 hours
     - cron: "0 */6 * * *"
 
 permissions:
@@ -18,41 +16,29 @@ jobs:
   football-predictions:
     name: Run Hybrid Prediction Engine
     runs-on: ubuntu-latest
+    environment: Api keys
     timeout-minutes: 15
 
     steps:
-
-      # ============================================================
-      # 1. CHECKOUT REPOSITORY
-      # ============================================================
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # ============================================================
-      # 2. SET UP PYTHON
-      # ============================================================
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
 
-      # ============================================================
-      # 3. VERIFY PROJECT FILES
-      # ============================================================
       - name: Verify project files
         shell: bash
         run: |
           echo "========================================"
           echo "PROJECT FILES"
           echo "========================================"
-
           pwd
-
           echo ""
           echo "Repository contents:"
           ls -la
-
           echo ""
           echo "Checking required files..."
 
@@ -69,36 +55,24 @@ jobs:
           echo ""
           echo "Required files found successfully."
 
-      # ============================================================
-      # 4. INSTALL DEPENDENCIES
-      # ============================================================
       - name: Install dependencies
         shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      # ============================================================
-      # 5. CHECK PYTHON SYNTAX
-      # ============================================================
       - name: Check Python syntax
         shell: bash
         run: |
           python -m py_compile hybrid_engine.py
           echo "Python syntax check passed."
 
-      # ============================================================
-      # 6. CREATE OUTPUT DIRECTORY
-      # ============================================================
       - name: Prepare output directory
         shell: bash
         run: |
           mkdir -p data/output
           echo "Output directory ready."
 
-      # ============================================================
-      # 7. RUN HYBRID ENGINE
-      # ============================================================
       - name: Run hybrid prediction engine
         shell: bash
         env:
@@ -122,9 +96,6 @@ jobs:
 
           python hybrid_engine.py
 
-      # ============================================================
-      # 8. SHOW GENERATED FILES
-      # ============================================================
       - name: Inspect prediction output
         if: always()
         shell: bash
@@ -139,9 +110,6 @@ jobs:
             echo "data/output directory does not exist."
           fi
 
-      # ============================================================
-      # 9. UPLOAD PREDICTION RESULTS
-      # ============================================================
       - name: Upload prediction results
         if: always()
         uses: actions/upload-artifact@v4
