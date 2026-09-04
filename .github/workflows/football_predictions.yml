@@ -7,36 +7,149 @@ on:
     # Runs every 6 hours
     - cron: "0 */6 * * *"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: football-prediction-engine
+  cancel-in-progress: false
+
 jobs:
-
   football-predictions:
-
+    name: Run Hybrid Prediction Engine
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
 
+      # ============================================================
+      # 1. CHECKOUT REPOSITORY
+      # ============================================================
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      # ============================================================
+      # 2. SET UP PYTHON
+      # ============================================================
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: "pip"
 
+      # ============================================================
+      # 3. VERIFY PROJECT FILES
+      # ============================================================
+      - name: Verify project files
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "PROJECT FILES"
+          echo "========================================"
+
+          pwd
+
+          echo ""
+          echo "Repository contents:"
+          ls -la
+
+          echo ""
+          echo "Checking required files..."
+
+          if [ ! -f "hybrid_engine.py" ]; then
+            echo "ERROR: hybrid_engine.py was not found."
+            exit 1
+          fi
+
+          if [ ! -f "requirements.txt" ]; then
+            echo "ERROR: requirements.txt was not found."
+            exit 1
+          fi
+
+          echo ""
+          echo "Required files found successfully."
+
+      # ============================================================
+      # 4. INSTALL DEPENDENCIES
+      # ============================================================
       - name: Install dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
 
+      # ============================================================
+      # 5. CHECK PYTHON SYNTAX
+      # ============================================================
+      - name: Check Python syntax
+        shell: bash
+        run: |
+          python -m py_compile hybrid_engine.py
+          echo "Python syntax check passed."
+
+      # ============================================================
+      # 6. CREATE OUTPUT DIRECTORY
+      # ============================================================
+      - name: Prepare output directory
+        shell: bash
+        run: |
+          mkdir -p data/output
+          echo "Output directory ready."
+
+      # ============================================================
+      # 7. RUN HYBRID ENGINE
+      # ============================================================
       - name: Run hybrid prediction engine
+        shell: bash
         env:
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
           FOOTBALL_API_KEY_2: ${{ secrets.FOOTBALL_API_KEY_2 }}
+          PYTHONUNBUFFERED: "1"
         run: |
+          echo "========================================"
+          echo "STARTING HYBRID FOOTBALL ENGINE"
+          echo "========================================"
+
+          if [ -z "$FOOTBALL_API_KEY" ]; then
+            echo "ERROR: FOOTBALL_API_KEY secret is missing."
+            exit 1
+          fi
+
+          if [ -z "$FOOTBALL_API_KEY_2" ]; then
+            echo "WARNING: FOOTBALL_API_KEY_2 is not configured."
+            echo "The engine will continue using the first API key."
+          fi
+
           python hybrid_engine.py
 
+      # ============================================================
+      # 8. SHOW GENERATED FILES
+      # ============================================================
+      - name: Inspect prediction output
+        if: always()
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "OUTPUT FILES"
+          echo "========================================"
+
+          if [ -d "data/output" ]; then
+            find data/output -maxdepth 2 -type f -print
+          else
+            echo "data/output directory does not exist."
+          fi
+
+      # ============================================================
+      # 9. UPLOAD PREDICTION RESULTS
+      # ============================================================
       - name: Upload prediction results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: football-predictions
-          path: data/output/
+          name: football-predictions-${{ github.run_number }}
+          path: |
+            data/output/**
+            *.json
+            *.log
+          if-no-files-found: warn
+          retention-days: 14
